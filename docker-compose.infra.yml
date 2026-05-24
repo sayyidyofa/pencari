@@ -1,0 +1,30 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: pencari-postgres
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: pencari
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: pencari-redis
+    ports:
+      - "6379:6379"
+
+  browserless:
+    image: browserless/chrome:latest
+    container_name: pencari-browserless
+    ports:
+      - "3000:3000"
+    environment:
+      - TOKEN=666-dev-token # Optional: Secure your instance
+      - MAX_CONCURRENT_SESSIONS=10
+
+volumes:
+  pgdata:
