@@ -1,25 +1,23 @@
+import postgres from 'postgres';
 import type { IDatabase } from '../../interfaces/IDatabase';
 
 export class PostgresDatabaseProvider implements IDatabase {
-  constructor(private url: string) {
-    console.log(`PostgresDatabaseProvider initialized with URL: ${url}`);
+  private sql: postgres.Sql;
+
+  constructor(url: string) {
+    this.sql = postgres(url);
   }
 
-  async query<T>(sql: string, params?: any[]): Promise<T[]> {
-    console.log(`Executing query: ${sql}`, params);
-    // Mock implementation for boilerplate
-    if (sql.includes('patterns')) {
-      return [
-        { pattern: 'co-founder' },
-        { pattern: 'startup' },
-        { pattern: 'hiring' },
-        { pattern: 'remote' },
-      ] as any;
-    }
-    return [];
+  async query<T extends object>(sql: string, params?: unknown[]): Promise<T[]> {
+    const results = await this.sql.unsafe(sql, (params || []) as never[]);
+    return results as unknown as T[];
+  }
+
+  async execute(sql: string, params?: unknown[]): Promise<void> {
+    await this.sql.unsafe(sql, (params || []) as never[]);
   }
 
   async disconnect(): Promise<void> {
-    console.log('PostgresDatabaseProvider disconnected');
+    await this.sql.end();
   }
 }
