@@ -5,9 +5,26 @@ import IORedis from 'ioredis';
 import { DatabaseFactory } from '../core/factories/DatabaseFactory';
 import { CacheFactory } from '../core/factories/CacheFactory';
 import { PatternRepository } from '../repositories/PatternRepository';
-import { RedditScraper } from '../scrapers/RedditScraper';
+import { TwitterScraper } from '../scrapers/TwitterScraper';
 import { FilterService } from '../services/FilterService';
 import { NotifierService } from '../services/NotifierService';
+import type { BrowserContext } from 'playwright';
+
+type PlaywrightCookie = Parameters<BrowserContext['addCookies']>[0][number];
+
+const parseTwitterCookies = (raw: string): PlaywrightCookie[] => {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      console.warn('TWITTER_COOKIES_JSON is not an array. Ignoring.');
+      return [];
+    }
+    return parsed as PlaywrightCookie[];
+  } catch (error) {
+    console.error('Failed to parse TWITTER_COOKIES_JSON:', error);
+    return [];
+  }
+};
 
 const connection = new IORedis(config.queue.redisUrl, {
   maxRetriesPerRequest: null,
@@ -20,7 +37,7 @@ export const startWorker = () => {
   
   const filterService = new FilterService();
   const notifierService = new NotifierService();
-  const redditScraper = new RedditScraper();
+  const twitterScraper = new TwitterScraper();
 
   const worker = new Worker(
     config.queue.name,
@@ -35,9 +52,18 @@ export const startWorker = () => {
       const browser = await chromium.connectOverCDP(config.browser.wsEndpoint);
       
       try {
+        // 2a. Inject persisted Twitter session cookies into the browser context
+        //     so the scraper bypasses the login wall.
+        const cookies = parseTwitterCookies(config.scraper.twitterCookiesJson);
+        if (cookies.length > 0) {
+          const context = browser.contexts()[0] ?? (await browser.newContext());
+          await context.addCookies(cookies);
+          console.log(`[Job ${job.id}] Injected ${cookies.length} Twitter cookies into the context.`);
+        }
+
         // 3. Instantiate the Scraper and fetch posts
-        const posts = await redditScraper.scrape(browser, patterns);
-        console.log(`[Job ${job.id}] Scraped ${posts.length} posts from Reddit`);
+        const posts = await twitterScraper.scrape(browser, patterns);
+        console.log(`[Job ${job.id}] Scraped ${posts.length} posts from Twitter`);
 
         for (const post of posts) {
           // 4. Deduplication: Check if its id exists in the ICache (Redis)
