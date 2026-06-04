@@ -2,12 +2,13 @@ import { Queue } from 'bullmq';
 import { config } from '../config';
 import IORedis from 'ioredis';
 
-const connection = new IORedis(config.queue.redisUrl, {
+// Exported so index.ts can close it during graceful shutdown.
+export const queueConnection = new IORedis(config.queue.redisUrl, {
   maxRetriesPerRequest: null,
 });
 
 export const scrapeQueue = new Queue(config.queue.name, {
-  connection,
+  connection: queueConnection,
   defaultJobOptions: {
     attempts: 3,
     backoff: {

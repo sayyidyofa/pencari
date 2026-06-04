@@ -24,8 +24,7 @@ export class RedditScraper implements IScraper {
 
       return await this.extractPosts(page);
     } finally {
-      await page.close();
-      await context.close();
+      await page.close(); // only close the page we created; caller owns the context
     }
   }
 

@@ -81,6 +81,21 @@ export class FilterService {
       throw new Error('LLM returned empty content');
     }
 
-    return JSON.parse(content) as { is_job_posting: boolean; match_score: number };
+    const rawResult: unknown = JSON.parse(content);
+
+    // Runtime shape validation — fail loudly if the LLM schema drifts. The throw
+    // is caught by the fail-safe boundary in evaluateIntent(), keeping it logged.
+    if (
+      typeof rawResult !== 'object' ||
+      rawResult === null ||
+      !('is_job_posting' in rawResult) ||
+      typeof (rawResult as Record<string, unknown>)['is_job_posting'] !== 'boolean'
+    ) {
+      throw new Error(
+        `LLM returned unexpected shape: ${JSON.stringify(rawResult).substring(0, 100)}`,
+      );
+    }
+
+    return rawResult as { is_job_posting: boolean; match_score: number };
   }
 }

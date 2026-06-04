@@ -6,10 +6,12 @@ import { DatabaseFactory } from '../core/factories/DatabaseFactory';
 import { CacheFactory } from '../core/factories/CacheFactory';
 import { PatternRepository } from '../repositories/PatternRepository';
 import { TwitterScraper } from '../scrapers/TwitterScraper';
+import { RedditScraper } from '../scrapers/RedditScraper';
 import { FilterService } from '../services/FilterService';
 import { NotifierService } from '../services/NotifierService';
 import { AuthenticationError, RateLimitError } from '../core/errors';
 import type { BrowserContext } from 'playwright';
+import type { IScraper } from '../core/types';
 
 type PlaywrightCookie = Parameters<BrowserContext['addCookies']>[0][number];
 
@@ -38,7 +40,7 @@ export const startWorker = () => {
   
   const filterService = new FilterService(config);
   const notifierService = new NotifierService(config);
-  const twitterScraper = new TwitterScraper();
+  const scrapers: IScraper[] = [new TwitterScraper(), new RedditScraper()];
 
   const worker = new Worker(
     config.queue.name,
@@ -64,9 +66,17 @@ export const startWorker = () => {
           console.log(`[Job ${job.id}] Injected ${cookies.length} Twitter cookies into the context.`);
         }
 
-        // 3. Instantiate the Scraper and fetch posts
-        const posts = await twitterScraper.scrape(context, patterns);
-        console.log(`[Job ${job.id}] Scraped ${posts.length} posts from Twitter`);
+        // 3. Run all scrapers against the shared context. Promise.allSettled
+        //    ensures one scraper failing (e.g. Reddit down) does not abort the
+        //    others; their posts are collected together.
+        const posts = (
+          await Promise.allSettled(scrapers.map((s) => s.scrape(context, patterns)))
+        ).flatMap((result) => {
+          if (result.status === 'fulfilled') return result.value;
+          console.error(`[Job ${job.id}] A scraper failed:`, result.reason);
+          return [];
+        });
+        console.log(`[Job ${job.id}] Scraped ${posts.length} posts`);
 
         for (const post of posts) {
           // 4. Deduplication: Check if its id exists in the ICache (Redis)

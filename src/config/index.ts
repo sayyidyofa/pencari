@@ -4,10 +4,20 @@ const parseEnvInt = (val: string | undefined, fallback: number): number => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const requireEnv = (key: string): string => {
+  const val = process.env[key];
+  if (!val) throw new Error(`Missing required environment variable: ${key}`);
+  return val;
+};
+
 export const config = {
   db: {
     provider: process.env.DB_PROVIDER || 'POSTGRES',
-    url: process.env.DB_URL || 'postgresql://user:password@localhost:5432/pencari',
+    // In production, DB_URL must be set. Fail fast rather than silently
+    // connecting to a wrong default database.
+    url: process.env.NODE_ENV === 'production'
+      ? requireEnv('DB_URL')
+      : (process.env.DB_URL || 'postgresql://user:password@localhost:5432/pencari'),
     seedPatterns: process.env.SEED_PATTERNS === 'true',
   },
   cache: {

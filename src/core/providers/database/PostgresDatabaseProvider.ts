@@ -9,11 +9,11 @@ export class PostgresDatabaseProvider implements IDatabase {
   }
 
   async query<T extends object>(sql: string, params: QueryParam[] = []): Promise<T[]> {
-    return this.sql.unsafe<T[]>(sql, params);
+    return this.sql.unsafe<T[]>(sql, params as postgres.ParameterOrJSON<number>[]);
   }
 
   async execute(sql: string, params: QueryParam[] = []): Promise<void> {
-    await this.sql.unsafe(sql, params);
+    await this.sql.unsafe(sql, params as postgres.ParameterOrJSON<number>[]);
   }
 
   async disconnect(): Promise<void> {

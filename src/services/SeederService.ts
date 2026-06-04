@@ -1,5 +1,5 @@
 import type { IDatabase } from '../core/interfaces/IDatabase';
-import { config } from '../config';
+import type { Config } from '../config';
 
 export class SeederService {
   private readonly curatedPatterns = [
@@ -15,37 +15,35 @@ export class SeederService {
     'who is hiring',
   ];
 
-  constructor(private db: IDatabase) {}
+  constructor(
+    private readonly db: IDatabase,
+    private readonly config: Pick<Config, 'db'>,
+  ) {}
 
   async run(): Promise<void> {
-    if (!config.db.seedPatterns) {
+    if (!this.config.db.seedPatterns) {
       console.log('Seeding is disabled. Skipping...');
       return;
     }
 
     console.log('🌱 Starting database seeding...');
 
-    try {
-      // 1. Create table if not exists
-      await this.db.execute(`
-        CREATE TABLE IF NOT EXISTS search_patterns (
-          id SERIAL PRIMARY KEY,
-          pattern VARCHAR(255) UNIQUE NOT NULL
-        )
-      `);
+    // 1. Create table if not exists
+    await this.db.execute(`
+      CREATE TABLE IF NOT EXISTS search_patterns (
+        id SERIAL PRIMARY KEY,
+        pattern VARCHAR(255) UNIQUE NOT NULL
+      )
+    `);
 
-      // 2. Insert curated patterns
-      for (const pattern of this.curatedPatterns) {
-        await this.db.execute(
-          'INSERT INTO search_patterns (pattern) VALUES ($1) ON CONFLICT (pattern) DO NOTHING',
-          [pattern]
-        );
-      }
-
-      console.log('✅ Seeding complete.');
-    } catch (error) {
-      console.error('❌ Seeding failed:', error);
-      throw error;
+    // 2. Insert curated patterns
+    for (const pattern of this.curatedPatterns) {
+      await this.db.execute(
+        'INSERT INTO search_patterns (pattern) VALUES ($1) ON CONFLICT (pattern) DO NOTHING',
+        [pattern]
+      );
     }
+
+    console.log('✅ Seeding complete.');
   }
 }

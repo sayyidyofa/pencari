@@ -22,23 +22,20 @@ export class NotifierService {
                `**Time:** ${post.timestamp.toLocaleString()}`,
     };
 
-    try {
-      const response = await fetch(this.config.notifier.webhookUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(message),
-      });
+    const response = await fetch(this.config.notifier.webhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(message),
+    });
 
-      if (!response.ok) {
-        //throw new Error(`Webhook error: ${response.status} ${response.statusText}`);
-        console.error(`Webhook error: ${response.status} ${response.statusText}`);
-      }
-
-      console.log(`Successfully sent alert for post: ${post.id}`);
-    } catch (error) {
-      console.error('Failed to send alert:', error);
+    if (!response.ok) {
+      // Propagate the failure so the caller (worker.ts) does NOT write to cache.
+      // The post will be retried on the next job run rather than silently lost.
+      throw new Error(`Webhook error: ${response.status} ${response.statusText}`);
     }
+
+    console.log(`Successfully sent alert for post: ${post.id}`);
   }
 }
