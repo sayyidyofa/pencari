@@ -5,7 +5,12 @@ export class RedisCacheProvider implements ICache {
   private client: Redis;
 
   constructor(url: string) {
-    this.client = new Redis(url);
+    this.client = new Redis(url, {
+      maxRetriesPerRequest: 3,
+      enableReadyCheck: true,
+      lazyConnect: true,
+      retryStrategy: (times) => Math.min(times * 200, 5000),
+    });
     this.client.on('error', (err) => console.error('Redis Client Error', err));
   }
 

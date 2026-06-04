@@ -22,5 +22,9 @@ ENV NODE_ENV=production
 ENV DB_PROVIDER=POSTGRES
 ENV CACHE_PROVIDER=REDIS
 
+# Run as a non-root user to comply with Kubernetes Pod Security Standards
+RUN addgroup --system pencari && adduser --system --ingroup pencari pencari
+USER pencari
+
 # Start the application
 CMD ["bun", "run", "index.ts"]

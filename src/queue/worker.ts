@@ -1,4 +1,4 @@
-import { Worker, Job } from 'bullmq';
+import { Worker, Job, UnrecoverableError } from 'bullmq';
 import { chromium } from 'playwright';
 import { config } from '../config';
 import IORedis from 'ioredis';
@@ -8,6 +8,7 @@ import { PatternRepository } from '../repositories/PatternRepository';
 import { TwitterScraper } from '../scrapers/TwitterScraper';
 import { FilterService } from '../services/FilterService';
 import { NotifierService } from '../services/NotifierService';
+import { AuthenticationError, RateLimitError } from '../core/errors';
 import type { BrowserContext } from 'playwright';
 
 type PlaywrightCookie = Parameters<BrowserContext['addCookies']>[0][number];
@@ -35,8 +36,8 @@ export const startWorker = () => {
   const cache = CacheFactory.getInstance();
   const patternRepo = new PatternRepository(db);
   
-  const filterService = new FilterService();
-  const notifierService = new NotifierService();
+  const filterService = new FilterService(config);
+  const notifierService = new NotifierService(config);
   const twitterScraper = new TwitterScraper();
 
   const worker = new Worker(
@@ -52,17 +53,19 @@ export const startWorker = () => {
       const browser = await chromium.connectOverCDP(config.browser.wsEndpoint);
       
       try {
-        // 2a. Inject persisted Twitter session cookies into the browser context
-        //     so the scraper bypasses the login wall.
+        // 2a. Resolve the browser context and inject persisted Twitter session
+        //     cookies into it so the scraper bypasses the login wall. The same
+        //     context is then passed explicitly to the scraper to avoid any
+        //     implicit coupling via contexts() lookup ordering.
+        const context = browser.contexts()[0] ?? (await browser.newContext());
         const cookies = parseTwitterCookies(config.scraper.twitterCookiesJson);
         if (cookies.length > 0) {
-          const context = browser.contexts()[0] ?? (await browser.newContext());
           await context.addCookies(cookies);
           console.log(`[Job ${job.id}] Injected ${cookies.length} Twitter cookies into the context.`);
         }
 
         // 3. Instantiate the Scraper and fetch posts
-        const posts = await twitterScraper.scrape(browser, patterns);
+        const posts = await twitterScraper.scrape(context, patterns);
         console.log(`[Job ${job.id}] Scraped ${posts.length} posts from Twitter`);
 
         for (const post of posts) {
@@ -101,8 +104,23 @@ export const startWorker = () => {
         }
 
       } catch (error) {
+        if (error instanceof RateLimitError) {
+          // Move job to a delayed state for the cooldown period instead of
+          // hammering the target through BullMQ's fast exponential backoff.
+          const delayMs = error.retryAfterMs > 0 ? error.retryAfterMs : 60 * 60 * 1000;
+          console.warn(`[Job ${job.id}] Rate limited. Delaying retry by ${delayMs}ms.`);
+          await job.moveToDelayed(Date.now() + delayMs);
+          return; // Do NOT rethrow — job is already moved.
+        }
+
+        if (error instanceof AuthenticationError) {
+          // Auth errors are unrecoverable without manual intervention.
+          console.error(`[Job ${job.id}] Authentication failed. Marking as unrecoverable.`);
+          throw new UnrecoverableError(error.message); // BullMQ will NOT retry.
+        }
+
         console.error(`[Job ${job.id}] Error during job processing:`, error);
-        throw error; // Let BullMQ handle retries
+        throw error; // Generic errors use standard BullMQ exponential backoff.
       } finally {
         // 9. Close the browser connection gracefully
         await browser.close();

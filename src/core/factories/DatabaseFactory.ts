@@ -3,9 +3,7 @@ import { PostgresDatabaseProvider } from '../providers/database/PostgresDatabase
 import { config } from '../../config';
 
 export class DatabaseFactory {
-  private static instance: IDatabase;
-
-  private constructor() {}
+  private static instance: IDatabase | undefined = undefined;
 
   public static getInstance(): IDatabase {
     if (!DatabaseFactory.instance) {
@@ -16,5 +14,10 @@ export class DatabaseFactory {
       }
     }
     return DatabaseFactory.instance;
+  }
+
+  /** For testing: allows resetting the singleton between test cases */
+  public static reset(): void {
+    DatabaseFactory.instance = undefined;
   }
 }

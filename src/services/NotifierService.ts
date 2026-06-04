@@ -1,12 +1,14 @@
-import { config } from '../config';
+import type { Config } from '../config';
 import type { Post } from '../core/types';
 
 export class NotifierService {
+  constructor(private readonly config: Pick<Config, 'notifier'>) {}
+
   /**
    * Sends an alert to a Discord or Telegram webhook.
    */
   async sendAlert(post: Post): Promise<void> {
-    if (!config.notifier.webhookUrl) {
+    if (!this.config.notifier.webhookUrl) {
       console.warn('Webhook URL not configured, skipping alert.');
       console.log(`[ALERT SIMULATION] Source: ${post.source} | Title: ${post.text} | URL: ${post.url}`);
       return;
@@ -21,7 +23,7 @@ export class NotifierService {
     };
 
     try {
-      const response = await fetch(config.notifier.webhookUrl, {
+      const response = await fetch(this.config.notifier.webhookUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -30,7 +32,8 @@ export class NotifierService {
       });
 
       if (!response.ok) {
-        throw new Error(`Webhook error: ${response.status} ${response.statusText}`);
+        //throw new Error(`Webhook error: ${response.status} ${response.statusText}`);
+        console.error(`Webhook error: ${response.status} ${response.statusText}`);
       }
 
       console.log(`Successfully sent alert for post: ${post.id}`);

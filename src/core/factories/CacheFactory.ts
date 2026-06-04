@@ -3,9 +3,7 @@ import { RedisCacheProvider } from '../providers/cache/RedisCacheProvider';
 import { config } from '../../config';
 
 export class CacheFactory {
-  private static instance: ICache;
-
-  private constructor() {}
+  private static instance: ICache | undefined = undefined;
 
   public static getInstance(): ICache {
     if (!CacheFactory.instance) {
@@ -16,5 +14,10 @@ export class CacheFactory {
       }
     }
     return CacheFactory.instance;
+  }
+
+  /** For testing: allows resetting the singleton between test cases */
+  public static reset(): void {
+    CacheFactory.instance = undefined;
   }
 }

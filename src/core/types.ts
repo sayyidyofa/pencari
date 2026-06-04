@@ -1,13 +1,13 @@
-import type { Browser } from 'playwright';
+import type { BrowserContext } from 'playwright';
 
 export interface Post {
   id: string;
   text: string;
   url: string;
-  source: string;
+  source: 'twitter' | 'reddit';
   timestamp: Date;
 }
 
 export interface IScraper {
-  scrape(browser: Browser, patterns: string[]): Promise<Post[]>;
+  scrape(context: BrowserContext, patterns: string[]): Promise<Post[]>;
 }
